@@ -1,0 +1,34 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+@import "@fontsource/barlow-condensed/700.css";
+@import "@fontsource/barlow-condensed/800-italic.css";
+
+@theme {
+  --font-display: "Barlow Condensed", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* sky-500 fails contrast with white text on light surfaces; 600 passes */
+:root { --ui-primary: var(--ui-color-primary-600); }
+.dark { --ui-primary: var(--ui-color-primary-400); }
+
+/* Player identity colors: dataviz reference palette, stepped per surface.
+   Violet before green so a typical group of six avoids two greens. */
+:root {
+  --player-1: #2a78d6; --player-2: #eb6834; --player-3: #1baf7a; --player-4: #eda100;
+  --player-5: #e87ba4; --player-6: #6250d6; --player-7: #008300; --player-8: #e34948;
+  --player-other: #94a3b8;
+  --result-win: #1baf7a; --result-draw: #94a3b8; --result-loss: #e34948;
+}
+.dark {
+  --player-1: #3987e5; --player-2: #d95926; --player-3: #199e70; --player-4: #c98500;
+  --player-5: #d55181; --player-6: #9085e9; --player-7: #008300; --player-8: #e66767;
+  --player-other: #64748b;
+  --result-win: #199e70; --result-draw: #64748b; --result-loss: #e66767;
+}
+
+@layer components {
+  /* Section label above cards and lists */
+  .eyebrow { @apply text-xs font-semibold tracking-[.12em] text-muted uppercase; }
+  /* Scores and headline numbers */
+  .display { @apply font-display font-extrabold italic tracking-tight tabular-nums; }
+}

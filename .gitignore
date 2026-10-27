@@ -1,0 +1,9 @@
+.env
+node_modules
+dist
+build
+.gradle
+.idea
+*.iml
+web/auto-imports.d.ts
+web/components.d.ts
