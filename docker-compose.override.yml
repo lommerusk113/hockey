@@ -1,0 +1,6 @@
+# Local development only: `docker compose` merges this automatically.
+# Deployments that name docker-compose.yml explicitly (e.g. Coolify) don't load it, so the database stays private there.
+services:
+  db:
+    ports:
+      - "${DB_PORT:-5433}:5432"
