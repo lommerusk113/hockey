@@ -47,6 +47,14 @@ final class SocialRepositories {
     }
 
     @JdbcRepository(dialect = Dialect.POSTGRES)
+    interface ChatReactionRepository extends CrudRepository<ChatReaction, Long> {
+
+        List<ChatReaction> findByMessageIdIn(Collection<Long> messageIds);
+
+        Optional<ChatReaction> findByMessageIdAndUserIdAndEmoji(Long messageId, Long userId, String emoji);
+    }
+
+    @JdbcRepository(dialect = Dialect.POSTGRES)
     interface PushSubscriptionRepository extends CrudRepository<PushSubscription, Long> {
 
         List<PushSubscription> findByUserIdIn(Collection<Long> userIds);

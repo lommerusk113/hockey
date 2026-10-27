@@ -53,6 +53,7 @@ export interface ChatMessage {
   userId: number
   body: string
   createdAt: string
+  reactions: { id: number; messageId: number; userId: number; emoji: string }[]
 }
 
 export const REACTIONS = ['🔥', '😂', '😱', '👏', '💀'] as const
@@ -107,6 +108,7 @@ export const api = {
   deleteComment: (id: number) => request<void>(`/api/comments/${id}`, { method: 'DELETE' }),
   toggleReaction: (matchId: number, emoji: string) => request<boolean>(`/api/matches/${matchId}/reactions`, json({ emoji })),
   chat: (after?: number) => request<ChatMessage[]>(after ? `/api/chat?after=${after}` : '/api/chat'),
+  toggleChatReaction: (messageId: number, emoji: string) => request<boolean>(`/api/chat/${messageId}/reactions`, json({ emoji })),
   sendChat: (body: string) => request<ChatMessage>('/api/chat', json({ body })),
   pushKey: () => request<{ publicKey: string }>('/api/push/key'),
   subscribePush: (subscription: PushSubscriptionJSON) => request<void>('/api/push/subscriptions', json(subscription)),

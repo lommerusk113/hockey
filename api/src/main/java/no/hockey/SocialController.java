@@ -22,10 +22,12 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import no.hockey.SocialRepositories.AppUserRepository;
 import no.hockey.SocialRepositories.ChatMessageRepository;
+import no.hockey.SocialRepositories.ChatReactionRepository;
 import no.hockey.SocialRepositories.MatchCommentRepository;
 import no.hockey.SocialRepositories.MatchReactionRepository;
 import no.hockey.SocialRepositories.PushSubscriptionRepository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
@@ -42,6 +44,7 @@ public class SocialController {
     private final MatchCommentRepository comments;
     private final MatchReactionRepository reactions;
     private final ChatMessageRepository chat;
+    private final ChatReactionRepository chatReactions;
     private final PushSubscriptionRepository subscriptions;
     private final Notifier notifier;
 
@@ -51,6 +54,7 @@ public class SocialController {
                             MatchCommentRepository comments,
                             MatchReactionRepository reactions,
                             ChatMessageRepository chat,
+                            ChatReactionRepository chatReactions,
                             PushSubscriptionRepository subscriptions,
                             Notifier notifier) {
         this.users = users;
@@ -59,6 +63,7 @@ public class SocialController {
         this.comments = comments;
         this.reactions = reactions;
         this.chat = chat;
+        this.chatReactions = chatReactions;
         this.subscriptions = subscriptions;
         this.notifier = notifier;
     }
@@ -149,15 +154,45 @@ public class SocialController {
         return true;
     }
 
-    /** The latest 100 messages, or only those after {@code after} when polling. Oldest first. */
+    /**
+     * The latest 100 messages with their reactions, oldest first. With {@code after}, only newer messages:
+     * a cheap poll for the unread badge while the chat is closed.
+     */
     @Get("/chat")
-    public List<ChatMessage> listChat(@QueryValue @Nullable Long after) {
+    public List<ChatMessageView> listChat(@QueryValue @Nullable Long after) {
 
-        if (after != null) {
-            return chat.findByIdGreaterThanOrderById(after);
+        var messages = after != null ? chat.findByIdGreaterThanOrderById(after) : chat.findTop100OrderByIdDesc().reversed();
+        var reactions = messages.isEmpty()
+            ? List.<ChatReaction>of()
+            : chatReactions.findByMessageIdIn(messages.stream().map(ChatMessage::id).toList());
+
+        return messages.stream()
+            .map(m -> new ChatMessageView(m.id(), m.userId(), m.body(), m.createdAt(),
+                reactions.stream().filter(r -> r.messageId().equals(m.id())).toList()))
+            .toList();
+    }
+
+    /** Toggles the current user's reaction on a chat message; returns whether it is now set. */
+    @Post("/chat/{messageId}/reactions")
+    public boolean toggleChatReaction(Authentication authentication, Long messageId, @Body @Valid Reaction reaction) {
+
+        if (!EMOJIS.contains(reaction.emoji())) {
+            throw new HttpStatusException(HttpStatus.BAD_REQUEST, "Unsupported reaction");
+        }
+        if (!chat.existsById(messageId)) {
+            throw new HttpStatusException(HttpStatus.NOT_FOUND, "Message not found");
+        }
+        var user = currentUser(authentication);
+
+        var existing = chatReactions.findByMessageIdAndUserIdAndEmoji(messageId, user.id(), reaction.emoji());
+        if (existing.isPresent()) {
+            chatReactions.delete(existing.get());
+            return false;
         }
 
-        return chat.findTop100OrderByIdDesc().reversed();
+        chatReactions.save(new ChatReaction(null, messageId, user.id(), reaction.emoji()));
+
+        return true;
     }
 
     @Status(HttpStatus.CREATED)
@@ -171,7 +206,7 @@ public class SocialController {
             .filter(other -> other.notifyChat() && !other.id().equals(user.id()))
             .map(AppUser::id)
             .toList();
-        notifier.notify(recipients, user.name(), message.body(), "/chat");
+        notifier.notify(recipients, user.name(), message.body(), "/?chat=1");
 
         return message;
     }
@@ -232,6 +267,10 @@ public class SocialController {
         static UserView of(AppUser user) {
             return new UserView(user.id(), user.name(), user.pictureUrl(), user.playerId());
         }
+    }
+
+    @Serdeable
+    public record ChatMessageView(Long id, Long userId, String body, Instant createdAt, List<ChatReaction> reactions) {
     }
 
     @Serdeable

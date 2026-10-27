@@ -41,6 +41,7 @@ export const addMatchOpen = ref(false)
 export const editingMatch = ref<Match>()
 export const playersOpen = ref(false)
 export const profileOpen = ref(false)
+export const chatOpen = ref(false)
 /** The match shown in the global match sheet. */
 export const openMatchId = ref<number>()
 export const isDesktop = useBreakpoints(breakpointsTailwind).greaterOrEqual('sm')

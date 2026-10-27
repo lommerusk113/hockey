@@ -2,24 +2,24 @@
 import { onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AddMatchSheet from './components/AddMatchSheet.vue'
+import ChatDock from './components/ChatDock.vue'
 import MatchSheet from './components/MatchSheet.vue'
 import PlayersSlideover from './components/PlayersSlideover.vue'
 import ProfileSlideover from './components/ProfileSlideover.vue'
 import SignIn from './components/SignIn.vue'
-import { addMatchOpen, loaded, me, openMatchId, playersOpen, profileOpen, refresh, signedOut } from './store'
+import { addMatchOpen, chatOpen, loaded, me, openMatchId, playersOpen, profileOpen, refresh, signedOut } from './store'
 
 onMounted(refresh)
 
-// Push notifications link to /?match=<id>: open that match, then drop the query
+// Push notifications link to /?match=<id> or /?chat=1: open that, then drop the query
 const route = useRoute()
 const router = useRouter()
 watch(
-  () => route.query.match,
-  (id) => {
-    if (id) {
-      openMatchId.value = Number(id)
-      router.replace({ query: {} })
-    }
+  () => route.query,
+  ({ match, chat }) => {
+    if (match) openMatchId.value = Number(match)
+    if (chat) chatOpen.value = true
+    if (match || chat) router.replace({ query: {} })
   },
   { immediate: true },
 )
@@ -28,7 +28,6 @@ const tabs = [
   { to: '/', label: 'Home', icon: 'i-lucide-house' },
   { to: '/stats', label: 'Stats', icon: 'i-lucide-chart-column' },
   { to: '/rivals', label: 'Rivals', icon: 'i-lucide-swords' },
-  { to: '/chat', label: 'Chat', icon: 'i-lucide-messages-square' },
 ]
 const tabClass = 'flex flex-col items-center gap-0.5 py-2 text-xs text-toned'
 const activeTabClass = '!text-primary font-semibold'
@@ -89,12 +88,16 @@ const activeTabClass = '!text-primary font-semibold'
               @click="addMatchOpen = true"
             />
           </div>
-          <RouterLink v-for="t in tabs.slice(2)" :key="t.to" :to="t.to" :class="tabClass" :exact-active-class="activeTabClass">
-            <UIcon :name="t.icon" class="size-6" />{{ t.label }}
+          <RouterLink :to="tabs[2].to" :class="tabClass" :exact-active-class="activeTabClass">
+            <UIcon :name="tabs[2].icon" class="size-6" />{{ tabs[2].label }}
           </RouterLink>
+          <button type="button" :class="tabClass" @click="playersOpen = true">
+            <UIcon name="i-lucide-users" class="size-6" />Players
+          </button>
         </div>
       </nav>
 
+      <ChatDock />
       <AddMatchSheet />
       <MatchSheet />
       <PlayersSlideover />

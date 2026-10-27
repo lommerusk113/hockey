@@ -66,7 +66,7 @@ function managePlayers() {
 
         <UFormField label="On the board I am" description="Links your account to your player, so you get notified about your matches.">
           <USelect
-            :model-value="me.playerId"
+            :model-value="me.playerId ?? undefined"
             :items="playerItems"
             placeholder="Pick your player"
             class="w-full"
