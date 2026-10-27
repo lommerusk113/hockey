@@ -113,6 +113,15 @@ public class HockeyController {
         return scanner.scan(image.getBytes(), contentType, active);
     }
 
+    /** Matches as CSV or board-style text, e.g. transcribed by another AI for a very full board. */
+    @Post(value = "/import", consumes = MediaType.TEXT_PLAIN)
+    public ScoreScanner.ImportResult importMatches(@Body String text) {
+
+        var active = players.listOrderByName().stream().filter(Player::active).toList();
+
+        return ScoreScanner.importText(text, active);
+    }
+
     private Player unique(Long id, Player player, Boolean active) {
 
         var name = player.name().trim();

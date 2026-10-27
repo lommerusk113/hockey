@@ -44,6 +44,15 @@ async function poll() {
   }
 }
 
+// Like Slack: a red dot on the tab icon, "(3)" in the title, and a badge on the installed app icon
+watch(unread, (count) => {
+  document.title = count ? `(${count}) Conta Hockey` : 'Conta Hockey'
+  document.querySelector<HTMLLinkElement>('link[rel="icon"]')?.setAttribute('href', count ? '/icon-unread.svg' : '/icon.svg')
+  if ('setAppBadge' in navigator) {
+    ;(count ? navigator.setAppBadge(count) : navigator.clearAppBadge()).catch(() => undefined)
+  }
+})
+
 const visibility = useDocumentVisibility()
 const { pause, resume } = useIntervalFn(poll, () => (chatOpen.value ? 4000 : 20000), { immediateCallback: true })
 watch(visibility, (v) => (v === 'visible' ? resume() : pause()))

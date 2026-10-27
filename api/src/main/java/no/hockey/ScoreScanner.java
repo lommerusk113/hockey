@@ -14,9 +14,11 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Reads match results off a photo (a whiteboard of results or a game scoreboard) using an OpenAI vision model.
@@ -33,6 +35,10 @@ public class ScoreScanner {
         A board can have several columns and 50 or more lines. Transcribe every single line; do not stop early or summarize.
         Read the left column top to bottom first, then the next column, keeping each line's left-to-right order.
         Faint, half-erased lines count too. Skip only lines that are truly unreadable.""";
+    // Import formats: "K,Mf,4,2" (comma/semicolon/tab, optional quotes) and the board style "K - Mf : 4 - 2"
+    private static final Pattern SEPARATED = Pattern.compile("^\"?([^,;\\t\"]+)\"?[,;\\t]\"?([^,;\\t\"]+)\"?[,;\\t]\\s*(\\d+)\\s*[,;\\t]\\s*(\\d+)\\s*$");
+    private static final Pattern BOARD = Pattern.compile("^(.+?)\\s*[-–]\\s*(.+?)\\s*:\\s*(\\d+)\\s*[-–]\\s*(\\d+)$");
+
     private static final Map<String, Object> SCHEMA = Map.of(
         "type", "object",
         "additionalProperties", false,
@@ -105,14 +111,50 @@ public class ScoreScanner {
 
         return json.readValue(text, AiResult.class).matches().stream()
             .map(ScoreScanner::splitMergedLabels)
-            .map(m -> new ScannedMatch(
-                m.homeLabel(),
-                m.awayLabel(),
-                resolve(m.homeLabel(), players),
-                resolve(m.awayLabel(), players),
-                m.homeGoals(),
-                m.awayGoals()))
+            .map(m -> toScanned(m, players))
             .toList();
+    }
+
+    /**
+     * Matches typed out by hand or by another tool, one per line: "K,Mf,4,2" (comma, semicolon or tab separated)
+     * or the board format "K - Mf : 4 - 2". Blank lines, # comments and a header row are ignored;
+     * any other line that doesn't parse is returned so the user can see what was skipped.
+     */
+    public static ImportResult importText(String text, List<Player> players) {
+
+        var matches = new ArrayList<ScannedMatch>();
+        var skipped = new ArrayList<String>();
+
+        for (var line : text.lines().map(String::strip).toList()) {
+            if (line.isEmpty() || line.startsWith("#")) {
+                continue;
+            }
+            var parsed = parseLine(line);
+            if (parsed != null) {
+                matches.add(toScanned(parsed, players));
+            } else if (line.matches(".*\\d.*")) {
+                skipped.add(line);
+            }
+            // lines without any digit are headers ("home,away,...") or headings: ignore
+        }
+
+        return new ImportResult(matches, skipped);
+    }
+
+    static @Nullable AiMatch parseLine(String line) {
+
+        for (var pattern : List.of(SEPARATED, BOARD)) {
+            var m = pattern.matcher(line);
+            if (m.matches()) {
+                return new AiMatch(m.group(1).strip(), m.group(2).strip(), Integer.parseInt(m.group(3)), Integer.parseInt(m.group(4)));
+            }
+        }
+
+        return null;
+    }
+
+    private static ScannedMatch toScanned(AiMatch m, List<Player> players) {
+        return new ScannedMatch(m.homeLabel(), m.awayLabel(), resolve(m.homeLabel(), players), resolve(m.awayLabel(), players), m.homeGoals(), m.awayGoals());
     }
 
     /**
@@ -162,6 +204,10 @@ public class ScoreScanner {
                                @Nullable Long awayPlayerId,
                                int homeGoals,
                                int awayGoals) {
+    }
+
+    @Serdeable
+    public record ImportResult(List<ScannedMatch> matches, List<String> skipped) {
     }
 
     @Serdeable

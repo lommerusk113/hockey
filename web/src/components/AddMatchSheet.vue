@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useToast } from '@nuxt/ui/composables'
 import { computed, reactive, ref, watch } from 'vue'
-import { api, downscale, type NewMatch } from '../api'
+import { api, downscale, type NewMatch, type ScannedMatch } from '../api'
 import { activePlayers, addMatchOpen, editingMatch, matches, playerName, players, playersOpen, refresh } from '../store'
 import ScanReview, { type ReviewRow } from './ScanReview.vue'
 import Sheet from './Sheet.vue'
@@ -21,6 +21,7 @@ const scanned = ref<{ left: number; right: number }>()
 const rows = ref<ReviewRow[]>([])
 const reviewing = computed(() => rows.value.length > 0)
 const fileInput = ref<HTMLInputElement>()
+const csvInput = ref<HTMLInputElement>()
 const toast = useToast()
 
 // Opening the sheet: load the match being edited, otherwise preselect the pair that played last.
@@ -68,6 +69,37 @@ const blocker = computed(() => {
 const scoreless = computed(() => form.homeGoals === 0 && form.awayGoals === 0)
 const triedSave = ref(false)
 
+const toRows = (found: ScannedMatch[]) => found.map((m, i) => ({ key: i, include: true, ...m }))
+
+// Typed-out results (CSV or "K - Mf : 4 - 2" lines) go through the same review as a scan
+async function onCsv(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  scanning.value = true
+  try {
+    const { matches: found, skipped } = await api.importMatches(await file.text())
+    if (!found.length) {
+      toast.add({ title: 'No matches found in the file', description: 'Expected lines like K,Mf,4,2 or K - Mf : 4 - 2.', color: 'warning' })
+      return
+    }
+    rows.value = toRows(found)
+    if (skipped.length) {
+      toast.add({
+        title: `${skipped.length} line${skipped.length === 1 ? '' : 's'} skipped`,
+        description: skipped.slice(0, 3).join(' · ') + (skipped.length > 3 ? ' …' : ''),
+        color: 'warning',
+        duration: 10000,
+      })
+    }
+  } catch (e) {
+    toast.add({ title: 'Import failed', description: (e as Error).message, color: 'error' })
+  } finally {
+    scanning.value = false
+  }
+}
+
 async function onPhoto(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
@@ -87,7 +119,7 @@ async function onPhoto(event: Event) {
       scanned.value = { left: found[0].homeGoals, right: found[0].awayGoals }
       return
     }
-    rows.value = found.map((m, i) => ({ key: i, include: true, ...m }))
+    rows.value = toRows(found)
   } catch (e) {
     toast.add({ title: 'Scan failed', description: (e as Error).message, color: 'error' })
   } finally {
@@ -208,6 +240,18 @@ function managePlayers() {
           @click="fileInput?.click()"
         />
         <input ref="fileInput" type="file" accept="image/*" capture="environment" class="hidden" @change="onPhoto" />
+        <UButton
+          block
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          icon="i-lucide-file-text"
+          label="Import CSV instead"
+          class="-mt-3"
+          :disabled="scanning"
+          @click="csvInput?.click()"
+        />
+        <input ref="csvInput" type="file" accept=".csv,.txt,text/csv,text/plain" class="hidden" @change="onCsv" />
       </template>
 
       <ScanReview v-if="reviewing" v-model:rows="rows" />

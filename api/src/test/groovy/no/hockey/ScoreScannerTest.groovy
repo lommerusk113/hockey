@@ -41,4 +41,31 @@ class ScoreScannerTest extends Specification {
             'K'       | 'Mf' || ['K', 'Mf']
             ''        | ''   || ['', '']
     }
+
+    def 'import CSV and board-style lines'() {
+        given:
+            def text = '''
+                home,away,homeGoals,awayGoals
+                K,Mf,4,2
+                "Jo";"M";1;3
+                Ni	Si	0	0
+                # comment
+                Si - Ni : 1 - 2
+                K-Mf: 3-3
+                this is 1 broken line
+            '''.stripIndent()
+        when:
+            def result = ScoreScanner.importText(text, players)
+        then:
+            result.matches()*.homeLabel() == ['K', 'Jo', 'Ni', 'Si', 'K']
+            result.matches()*.awayLabel() == ['Mf', 'M', 'Si', 'Ni', 'Mf']
+            result.matches()*.homeGoals() == [4, 1, 0, 1, 3]
+            result.matches()*.awayGoals() == [2, 3, 0, 2, 3]
+        and:
+            result.matches()[0].homePlayerId() == 4L
+            result.matches()[0].awayPlayerId() == 2L
+            result.matches()[3].homePlayerId() == null
+        and:
+            result.skipped() == ['this is 1 broken line']
+    }
 }

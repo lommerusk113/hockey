@@ -117,6 +117,8 @@ export const api = {
   subscribePush: (subscription: PushSubscriptionJSON) => request<void>('/api/push/subscriptions', json(subscription)),
   unsubscribePush: (endpoint: string) =>
     request<void>(`/api/push/subscriptions?endpoint=${encodeURIComponent(endpoint)}`, { method: 'DELETE' }),
+  importMatches: (text: string) =>
+    request<{ matches: ScannedMatch[]; skipped: string[] }>('/api/import', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: text }),
   scan: (image: Blob) => {
     const form = new FormData()
     form.append('image', image, 'scoreboard.jpg')
