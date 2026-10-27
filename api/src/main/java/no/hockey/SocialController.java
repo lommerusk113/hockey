@@ -36,7 +36,7 @@ import java.util.Set;
 @Controller("/api")
 public class SocialController {
 
-    static final Set<String> EMOJIS = Set.of("🔥", "😂", "😱", "👏", "💀");
+    static final Set<String> EMOJIS = Set.of("👍", "👎", "🔥", "😂", "😱", "👏", "💀");
 
     private final AppUserRepository users;
     private final MatchRepository matches;

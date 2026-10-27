@@ -9,8 +9,12 @@ import jakarta.validation.constraints.NotBlank;
 
 /**
  * @param shortName how the player is written on the results board, e.g. "Ni" for Nico
+ * @param active    false hides the player when recording matches; their history stays in the stats
  */
 @Serdeable
 @MappedEntity
-public record Player(@Id @GeneratedValue @Nullable Long id, @NotBlank String name, @NotBlank String shortName) {
+public record Player(@Id @GeneratedValue @Nullable Long id,
+                     @NotBlank String name,
+                     @NotBlank String shortName,
+                     @Nullable Boolean active) {
 }

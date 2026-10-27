@@ -15,7 +15,7 @@ onMounted(async () => (push.value = await pushState()))
 const playerItems = computed(() => [
   { label: 'Not playing', value: undefined },
   ...players.value
-    .filter((p) => !users.value.some((u) => u.playerId === p.id && u.id !== me.value?.id))
+    .filter((p) => (p.active || p.id === me.value?.playerId) && !users.value.some((u) => u.playerId === p.id && u.id !== me.value?.id))
     .map((p) => ({ label: `${p.name} (${p.shortName})`, value: p.id })),
 ])
 

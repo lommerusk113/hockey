@@ -5,11 +5,11 @@ import spock.lang.Specification
 class ScoreScannerTest extends Specification {
 
     def players = [
-        new Player(1, 'Marcus', 'M'),
-        new Player(2, 'Marius', 'MF'),
-        new Player(3, 'Joakim', 'Jo'),
-        new Player(4, 'Kristian', 'K'),
-        new Player(5, 'Nico', 'Ni'),
+        new Player(1, 'Marcus', 'M', true),
+        new Player(2, 'Marius', 'MF', true),
+        new Player(3, 'Joakim', 'Jo', true),
+        new Player(4, 'Kristian', 'K', true),
+        new Player(5, 'Nico', 'Ni', true),
     ]
 
     def 'resolve #label to #expected'() {

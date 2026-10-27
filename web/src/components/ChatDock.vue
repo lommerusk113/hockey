@@ -63,7 +63,11 @@ async function send() {
   }
 }
 
+// The message whose reaction picker is open; picking a reaction closes it
+const pickerFor = ref<number>()
+
 async function react(message: ChatMessage, emoji: string) {
+  pickerFor.value = undefined
   await api.toggleChatReaction(message.id, emoji).catch(() => undefined)
   await poll()
 }
@@ -123,53 +127,51 @@ const participants = computed(() => [...new Set(messages.value.map((m) => m.user
       <ol class="space-y-0.5">
         <li v-for="(m, i) in messages" :key="m.id">
           <p v-if="newDay(i)" class="my-3 text-center text-xs text-muted">{{ day(m.createdAt) }}</p>
-          <div class="group flex items-end gap-2" :class="{ 'flex-row-reverse': mine(m), 'mt-3': firstOfRun(i) && !newDay(i) }">
-            <div class="w-7 shrink-0">
-              <UserAvatar v-if="firstOfRun(i)" :id="m.userId" size="sm" />
+          <p v-if="firstOfRun(i) && !mine(m)" class="mt-3 mb-0.5 ml-10 text-xs font-medium text-muted">{{ userById(m.userId)?.name ?? '?' }}</p>
+          <!-- Avatar, bubble, reactions on one row, centred on the bubble; reactions sit on the outer side -->
+          <div class="group flex items-center gap-1.5" :class="{ 'flex-row-reverse': mine(m), 'mt-3': firstOfRun(i) && mine(m) && !newDay(i) }">
+            <div class="grid w-8 shrink-0 place-items-center">
+              <UserAvatar v-if="firstOfRun(i)" :id="m.userId" size="md" />
             </div>
-            <div class="flex max-w-[75%] flex-col" :class="mine(m) ? 'items-end' : 'items-start'">
-              <p v-if="firstOfRun(i) && !mine(m)" class="mb-0.5 ml-1 text-xs font-medium text-muted">{{ userById(m.userId)?.name ?? '?' }}</p>
-              <div class="flex items-center gap-1" :class="{ 'flex-row-reverse': !mine(m) }">
-                <UPopover :content="{ side: 'top' }">
-                  <UButton
-                    icon="i-lucide-smile-plus"
-                    size="xs"
-                    color="neutral"
-                    variant="ghost"
-                    class="opacity-60 group-hover:opacity-100 sm:opacity-0 sm:focus-visible:opacity-100"
-                    aria-label="React"
-                  />
-                  <template #content>
-                    <div class="flex gap-1 p-1">
-                      <UButton v-for="e in REACTIONS" :key="e" color="neutral" variant="ghost" class="text-xl" :aria-label="`React ${e}`" @click="react(m, e)">
-                        {{ e }}
-                      </UButton>
-                    </div>
-                  </template>
-                </UPopover>
-                <div
-                  class="rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-line"
-                  :class="mine(m) ? 'rounded-br-md bg-primary text-inverted' : 'rounded-bl-md bg-elevated text-highlighted'"
+            <div
+              class="max-w-[65%] min-w-0 rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-line"
+              :class="mine(m) ? 'rounded-br-md bg-primary text-inverted' : 'rounded-bl-md bg-elevated text-highlighted'"
+            >
+              {{ m.body }}
+              <span class="ml-1.5 align-bottom text-[10px] opacity-70">{{ time(m.createdAt) }}</span>
+            </div>
+            <div v-if="m.reactions.length" class="flex shrink-0 gap-1" :class="{ 'flex-row-reverse': mine(m) }">
+              <UTooltip v-for="r in reactionChips(m)" :key="r.emoji" :text="r.names">
+                <button
+                  type="button"
+                  class="flex items-center gap-0.5 rounded-full border px-1.5 text-xs leading-5 tabular-nums"
+                  :class="r.mine ? 'border-primary bg-primary/10' : 'border-default bg-default'"
+                  :aria-pressed="r.mine"
+                  :aria-label="`${r.emoji} ${r.count}`"
+                  @click="react(m, r.emoji)"
                 >
-                  {{ m.body }}
-                  <span class="ml-1.5 align-bottom text-[10px] opacity-70">{{ time(m.createdAt) }}</span>
-                </div>
-              </div>
-              <div v-if="m.reactions.length" class="-mt-1 flex gap-1" :class="mine(m) ? 'mr-7' : 'ml-1'">
-                <UTooltip v-for="r in reactionChips(m)" :key="r.emoji" :text="r.names">
-                  <button
-                    type="button"
-                    class="flex items-center gap-0.5 rounded-full border px-1.5 text-xs leading-5 tabular-nums"
-                    :class="r.mine ? 'border-primary bg-primary/10' : 'border-default bg-default'"
-                    :aria-pressed="r.mine"
-                    :aria-label="`${r.emoji} ${r.count}`"
-                    @click="react(m, r.emoji)"
-                  >
-                    {{ r.emoji }}<span v-if="r.count > 1">{{ r.count }}</span>
-                  </button>
-                </UTooltip>
-              </div>
+                  {{ r.emoji }}<span v-if="r.count > 1">{{ r.count }}</span>
+                </button>
+              </UTooltip>
             </div>
+            <UPopover :open="pickerFor === m.id" :content="{ side: 'top' }" @update:open="(open: boolean) => (pickerFor = open ? m.id : undefined)">
+              <UButton
+                icon="i-lucide-smile-plus"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                class="shrink-0 opacity-60 group-hover:opacity-100 sm:opacity-0 sm:focus-visible:opacity-100"
+                :class="{ 'sm:opacity-100': pickerFor === m.id }"
+                aria-label="React"
+              />
+              <template #content>
+                <div class="flex gap-0.5 p-1">
+                  <UButton v-for="e in REACTIONS" :key="e" color="neutral" variant="ghost" class="text-xl" :aria-label="`React ${e}`" @click="react(m, e)">
+                    {{ e }}
+                  </UButton>
+                </div>
+              </template>
+            </UPopover>
           </div>
         </li>
       </ol>

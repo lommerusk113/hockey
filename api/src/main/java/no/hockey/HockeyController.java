@@ -45,17 +45,16 @@ public class HockeyController {
     @Status(HttpStatus.CREATED)
     @Post("/players")
     public Player createPlayer(@Body @Valid Player player) {
-        return players.save(unique(null, player));
+        return players.save(unique(null, player, true));
     }
 
     @Put("/players/{id}")
     public Player updatePlayer(Long id, @Body @Valid Player player) {
 
-        if (!players.existsById(id)) {
-            throw new HttpStatusException(HttpStatus.NOT_FOUND, "Player not found");
-        }
+        var existing = players.findById(id)
+            .orElseThrow(() -> new HttpStatusException(HttpStatus.NOT_FOUND, "Player not found"));
 
-        return players.update(unique(id, player));
+        return players.update(unique(id, player, player.active() == null ? existing.active() : player.active()));
     }
 
     @Status(HttpStatus.NO_CONTENT)
@@ -109,10 +108,12 @@ public class HockeyController {
 
         var contentType = image.getContentType().map(MediaType::toString).orElse(MediaType.IMAGE_JPEG);
 
-        return scanner.scan(image.getBytes(), contentType, players.listOrderByName());
+        var active = players.listOrderByName().stream().filter(Player::active).toList();
+
+        return scanner.scan(image.getBytes(), contentType, active);
     }
 
-    private Player unique(Long id, Player player) {
+    private Player unique(Long id, Player player, Boolean active) {
 
         var name = player.name().trim();
         var shortName = player.shortName().trim();
@@ -129,7 +130,7 @@ public class HockeyController {
             }
         }
 
-        return new Player(id, name, shortName);
+        return new Player(id, name, shortName, active);
     }
 
     private Match withDefaults(Long id, Match match) {

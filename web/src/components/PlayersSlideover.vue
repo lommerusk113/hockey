@@ -85,6 +85,12 @@ async function remove(p: Player) {
   confirmingDelete.value = undefined
 }
 
+// Active players first, disabled ones below
+const sorted = computed(() => [...players.value].sort((a, b) => Number(b.active) - Number(a.active)))
+
+const setActive = (p: Player, active: boolean) =>
+  attempt(() => api.setPlayerActive(p, active), active ? 'Could not enable' : 'Could not disable')
+
 const menu = (p: Player) => [
   [{ label: 'Edit', icon: 'i-lucide-pencil', onSelect: () => startEdit(p) }],
   gamesPlayed.value.get(p.id)
@@ -107,8 +113,8 @@ const menu = (p: Player) => [
 
       <UEmpty v-if="!players.length" icon="i-lucide-users" title="No players yet" description="Add the people you play against." />
       <ul class="divide-y divide-default">
-        <li v-for="p in players" :key="p.id" class="flex min-h-14 items-center gap-3 py-2">
-          <PlayerAvatar :id="p.id" size="md" />
+        <li v-for="p in sorted" :key="p.id" class="flex min-h-14 items-center gap-3 py-2">
+          <PlayerAvatar :id="p.id" size="md" :class="{ 'opacity-40 grayscale': !p.active }" />
           <form v-if="editing?.id === p.id" class="flex-1 space-y-1" @submit.prevent="update">
             <div class="flex gap-2">
               <UInput v-model="editName" class="min-w-0 flex-1" autofocus aria-label="Player name" @keydown.esc="editing = undefined" />
@@ -119,10 +125,20 @@ const menu = (p: Player) => [
             <p v-if="editProblem" class="text-xs text-error">{{ editProblem }}</p>
           </form>
           <template v-else>
-            <div class="flex-1">
-              <p class="font-medium">{{ p.name }}</p>
-              <p class="text-xs text-muted">“{{ p.shortName }}” · {{ gamesPlayed.get(p.id) ?? 0 }} matches</p>
+            <div class="min-w-0 flex-1" :class="{ 'opacity-60': !p.active }">
+              <p class="truncate font-medium">{{ p.name }}</p>
+              <p class="text-xs text-muted">
+                “{{ p.shortName }}” · {{ gamesPlayed.get(p.id) ?? 0 }} matches<template v-if="!p.active"> · disabled</template>
+              </p>
             </div>
+            <UTooltip :text="p.active ? 'Playing — turn off to hide when recording matches' : 'Disabled — turn on to play again'">
+              <USwitch
+                :model-value="p.active"
+                :aria-label="`${p.name} is ${p.active ? 'active' : 'disabled'}`"
+                :disabled="saving"
+                @update:model-value="(v: boolean) => setActive(p, v)"
+              />
+            </UTooltip>
             <UButton
               v-if="confirmingDelete === p.id"
               color="error"

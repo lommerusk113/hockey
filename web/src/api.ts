@@ -3,6 +3,8 @@ export interface Player {
   name: string
   /** How the player is written on the results board, e.g. "Ni" */
   shortName: string
+  /** Inactive players are hidden when recording matches but stay in the stats */
+  active: boolean
 }
 
 export interface Match {
@@ -56,7 +58,7 @@ export interface ChatMessage {
   reactions: { id: number; messageId: number; userId: number; emoji: string }[]
 }
 
-export const REACTIONS = ['🔥', '😂', '😱', '👏', '💀'] as const
+export const REACTIONS = ['👍', '👎', '🔥', '😂', '😱', '👏', '💀'] as const
 
 /** Thrown for 401 so the app can show the sign-in screen. */
 export class SignedOutError extends Error {}
@@ -94,6 +96,7 @@ export const api = {
   players: () => request<Player[]>('/api/players'),
   addPlayer: (name: string, shortName: string) => request<Player>('/api/players', json({ name, shortName })),
   updatePlayer: (id: number, name: string, shortName: string) => request<Player>(`/api/players/${id}`, json({ name, shortName }, 'PUT')),
+  setPlayerActive: (p: Player, active: boolean) => request<Player>(`/api/players/${p.id}`, json({ name: p.name, shortName: p.shortName, active }, 'PUT')),
   deletePlayer: (id: number) => request<void>(`/api/players/${id}`, { method: 'DELETE' }),
   matches: () => request<Match[]>('/api/matches'),
   addMatch: (m: NewMatch) => request<Match>('/api/matches', json(m)),

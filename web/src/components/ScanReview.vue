@@ -2,7 +2,7 @@
 import { useToast } from '@nuxt/ui/composables'
 import { computed, reactive, ref } from 'vue'
 import { api } from '../api'
-import { players, refresh } from '../store'
+import { activePlayers, refresh } from '../store'
 
 export interface ReviewRow {
   key: number
@@ -99,7 +99,7 @@ async function addPlayer(label: string) {
       <div class="grid grid-cols-[minmax(0,1fr)_auto_auto_auto_minmax(0,1fr)] items-center gap-1.5">
         <USelect
           :model-value="row.homePlayerId"
-          :items="players"
+          :items="activePlayers"
           value-key="id"
           label-key="name"
           :placeholder="row.homeLabel ? `“${row.homeLabel}”?` : 'Player'"
@@ -113,7 +113,7 @@ async function addPlayer(label: string) {
         <UInput v-model.number="row.awayGoals" type="number" min="0" inputmode="numeric" class="w-11" :ui="{ base: 'display px-0 text-center text-xl' }" :aria-label="`Line ${i + 1} second player goals`" />
         <USelect
           :model-value="row.awayPlayerId"
-          :items="players"
+          :items="activePlayers"
           value-key="id"
           label-key="name"
           :placeholder="row.awayLabel ? `“${row.awayLabel}”?` : 'Player'"

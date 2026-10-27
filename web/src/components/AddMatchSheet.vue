@@ -2,7 +2,7 @@
 import { useToast } from '@nuxt/ui/composables'
 import { computed, reactive, ref, watch } from 'vue'
 import { api, downscale, type NewMatch } from '../api'
-import { addMatchOpen, editingMatch, matches, playerName, players, playersOpen, refresh } from '../store'
+import { activePlayers, addMatchOpen, editingMatch, matches, playerName, players, playersOpen, refresh } from '../store'
 import ScanReview, { type ReviewRow } from './ScanReview.vue'
 import Sheet from './Sheet.vue'
 
@@ -36,13 +36,22 @@ watch(addMatchOpen, (open) => {
     dateMode.value = 'other'
   } else {
     const last = matches.value[0]
-    Object.assign(form, { homePlayerId: form.homePlayerId ?? last?.homePlayerId, awayPlayerId: form.awayPlayerId ?? last?.awayPlayerId, homeGoals: 0, awayGoals: 0 })
+    const activeId = (id?: number) => (activePlayers.value.some((p) => p.id === id) ? id : undefined)
+    Object.assign(form, {
+      homePlayerId: activeId(form.homePlayerId ?? last?.homePlayerId),
+      awayPlayerId: activeId(form.awayPlayerId ?? last?.awayPlayerId),
+      homeGoals: 0,
+      awayGoals: 0,
+    })
     setDateMode('now')
   }
   scanned.value = undefined
   rows.value = []
   triedSave.value = false
 })
+
+// Active players, plus whoever is already picked (editing an old match with a since-disabled player)
+const pickable = computed(() => players.value.filter((p) => p.active || p.id === form.homePlayerId || p.id === form.awayPlayerId))
 
 const samePlayer = computed(() => !!form.homePlayerId && form.homePlayerId === form.awayPlayerId)
 const blocker = computed(() => {
@@ -195,7 +204,7 @@ function managePlayers() {
     :description="editingMatch ? 'Fix the players, score or time' : reviewing ? `Found ${rows.length} matches — check them before saving` : 'Scan the results board or enter a score'"
   >
     <UEmpty
-      v-if="players.length < 2"
+      v-if="activePlayers.length < 2"
       icon="i-lucide-users"
       title="Add players first"
       description="You need at least two players to record a match."
@@ -220,11 +229,11 @@ function managePlayers() {
       <div v-else class="space-y-3">
         <div class="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
           <UFormField label="Left side" :ui="{ label: 'eyebrow' }">
-            <USelect v-model="form.homePlayerId" :items="players" value-key="id" label-key="name" placeholder="Player" class="w-full" size="xl" />
+            <USelect v-model="form.homePlayerId" :items="pickable" value-key="id" label-key="name" placeholder="Player" class="w-full" size="xl" />
           </UFormField>
           <UButton icon="i-lucide-arrow-left-right" color="neutral" variant="ghost" size="lg" aria-label="Swap players" @click="swap" />
           <UFormField label="Right side" :ui="{ label: 'eyebrow', root: 'text-right' }">
-            <USelect v-model="form.awayPlayerId" :items="players" value-key="id" label-key="name" placeholder="Player" class="w-full" size="xl" />
+            <USelect v-model="form.awayPlayerId" :items="pickable" value-key="id" label-key="name" placeholder="Player" class="w-full" size="xl" />
           </UFormField>
         </div>
         <p class="-mt-1 text-xs text-muted">Sides as seen on the scoreboard.</p>
@@ -275,7 +284,7 @@ function managePlayers() {
       <UButton v-if="reviewing" variant="link" color="neutral" size="sm" icon="i-lucide-pencil" label="Enter one match by hand instead" class="px-0" @click="rows = []" />
       <UButton v-else variant="link" color="neutral" size="sm" icon="i-lucide-users" label="Manage players" class="px-0" @click="managePlayers" />
     </form>
-    <template v-if="players.length >= 2" #footer>
+    <template v-if="activePlayers.length >= 2" #footer>
       <div class="w-full space-y-1.5">
         <UButton type="submit" form="add-match" block size="xl" :label="editingMatch ? 'Save changes' : reviewing ? `Save ${includedCount} ${includedCount === 1 ? 'match' : 'matches'}` : 'Save match'" icon="i-lucide-check" :loading="saving" :disabled="!!blocker" />
         <p v-if="blocker" class="text-center text-xs text-muted">{{ blocker }}</p>

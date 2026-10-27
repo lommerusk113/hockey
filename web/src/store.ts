@@ -13,6 +13,8 @@ export const reactions = ref<MatchReaction[]>([])
 export const loaded = ref(false)
 export const loadError = ref('')
 export const playerIds = computed(() => players.value.map((p) => p.id))
+/** Players offered when recording matches */
+export const activePlayers = computed(() => players.value.filter((p) => p.active))
 export const playerShortName = computed(() => {
   const names = new Map(players.value.map((p) => [p.id, p.shortName]))
   return (id: number) => names.get(id) ?? '?'
