@@ -18,6 +18,8 @@ dependencies {
     annotationProcessor("io.micronaut.serde:micronaut-serde-processor")
     annotationProcessor("io.micronaut.validation:micronaut-validation-processor")
     implementation("io.micronaut.data:micronaut-data-jdbc")
+    // Needed by the Google OpenID client (discovery and token exchange); without it the OAuth routes are silently skipped
+    implementation("io.micronaut:micronaut-http-client")
     implementation("io.micronaut.flyway:micronaut-flyway")
     implementation("io.micronaut.security:micronaut-security-jwt")
     implementation("io.micronaut.security:micronaut-security-oauth2")
