@@ -44,6 +44,9 @@ export const editingMatch = ref<Match>()
 export const playersOpen = ref(false)
 export const profileOpen = ref(false)
 export const chatOpen = ref(false)
+/** The player profile shown in the global slide-in, with the stats period it was opened from. */
+export const playerView = ref<{ id: number; period: string }>()
+export const openPlayer = (id: number, period = 'all') => (playerView.value = { id, period })
 /** The match shown in the global match sheet. */
 export const openMatchId = ref<number>()
 export const isDesktop = useBreakpoints(breakpointsTailwind).greaterOrEqual('sm')

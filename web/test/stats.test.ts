@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { headToHead, inPeriod, leaders, periods, recentForm, standings } from '../src/stats.ts'
+import { headToHead, inPeriod, leaders, matchRecords, METRICS, minGames, periods, ranking, recentForm, standings } from '../src/stats.ts'
 
 const m = (id: number, playedAt: string, home: number, away: number, hg: number, ag: number) =>
   ({ id, playedAt, homePlayerId: home, awayPlayerId: away, homeGoals: hg, awayGoals: ag })
@@ -24,11 +24,19 @@ test('periods and filtering', () => {
   assert.equal(matches.filter((x) => inPeriod(x, '2025')).length, 1)
 })
 
-test('leaders', () => {
-  const byTitle = Object.fromEntries(leaders(matches).map((l) => [l.title, l]))
-  assert.deepEqual(byTitle['Most goals'].playerIds, [1])
-  assert.equal(byTitle['Biggest win'].value, '5–1')
-  assert.deepEqual(byTitle['Best defence (conceded/game)'].playerIds, [1])
+const metric = (key: string) => METRICS.find((m) => m.key === key)!
+
+test('leaders and rankings', () => {
+  const rows = standings(matches)
+  assert.equal(minGames(rows), 3)
+  assert.deepEqual(leaders(rows, metric('goals')).map((r) => r.row.playerId), [1])
+  // lower is better for defence: player 1 conceded 3 in 3 games
+  assert.deepEqual(leaders(rows, metric('concededPerGame')).map((r) => r.row.playerId), [1])
+  // player 3 played only 2 games: unranked for per-game stats, listed last
+  const winRate = ranking(rows, metric('winRate'))
+  assert.equal(winRate.at(-1)!.row.playerId, 3)
+  assert.equal(winRate.at(-1)!.qualified, false)
+  assert.equal(matchRecords(matches)[0].match.id, 3)
 })
 
 test('head to head', () => {

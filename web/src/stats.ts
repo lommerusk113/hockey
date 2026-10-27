@@ -77,41 +77,91 @@ export function standings(matches: Match[]): Row[] {
 export const winPct = (r: Row) => (r.played ? r.wins / r.played : 0)
 export const perGame = (n: number, r: Row) => (r.played ? n / r.played : 0)
 
-export interface Leader {
+const int = (v: number) => String(v)
+const avg = (v: number) => v.toFixed(2)
+const signed = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(2)}`
+const pct = (v: number) => `${Math.round(v * 100)}%`
+
+/** A per-player stat that can be ranked. Per-game stats only rank players with enough games. */
+export interface Metric {
+  key: string
   title: string
-  playerIds: number[]
-  value: string
-  match?: Match
+  /** Fits a phone-width stat card */
+  short?: string
+  description: string
+  icon: string
+  value: (r: Row) => number
+  format: (v: number) => string
+  lowerIsBetter?: boolean
+  perGame?: boolean
 }
 
-function best(rows: Row[], title: string, score: (r: Row) => number, format: (v: number) => string, lowest = false): Leader | null {
-  if (!rows.length) {
-    return null
-  }
-  const values = rows.map(score)
-  const top = lowest ? Math.min(...values) : Math.max(...values)
-  return { title, playerIds: rows.filter((_, i) => values[i] === top).map((r) => r.playerId), value: format(top) }
+export const METRICS: Metric[] = [
+  { key: 'winRate', title: 'Win rate', description: 'Share of games won', icon: 'i-lucide-trophy', value: winPct, format: pct, perGame: true },
+  { key: 'goalsPerGame', title: 'Goals per game', short: 'Goals / game', description: 'Goals scored per game', icon: 'i-lucide-goal', value: (r) => perGame(r.goalsFor, r), format: avg, perGame: true },
+  {
+    key: 'concededPerGame',
+    title: 'Best defence',
+    description: 'Goals conceded per game, fewer is better',
+    icon: 'i-lucide-shield',
+    value: (r) => perGame(r.goalsAgainst, r),
+    format: avg,
+    lowerIsBetter: true,
+    perGame: true,
+  },
+  {
+    key: 'goalDiffPerGame',
+    title: 'Goal difference per game',
+    short: 'Goal diff / game',
+    description: 'Goals scored minus conceded, per game',
+    icon: 'i-lucide-scale',
+    value: (r) => perGame(r.goalsFor - r.goalsAgainst, r),
+    format: signed,
+    perGame: true,
+  },
+  { key: 'cleanSheetRate', title: 'Clean sheet rate', description: 'Share of games without conceding', icon: 'i-lucide-lock', value: (r) => perGame(r.cleanSheets, r), format: pct, perGame: true },
+  { key: 'wins', title: 'Most wins', description: 'Games won', icon: 'i-lucide-medal', value: (r) => r.wins, format: int },
+  { key: 'goals', title: 'Most goals', description: 'Goals scored', icon: 'i-lucide-target', value: (r) => r.goalsFor, format: int },
+  { key: 'conceded', title: 'Most goals against', description: 'Goals conceded', icon: 'i-lucide-shield-off', value: (r) => r.goalsAgainst, format: int },
+  { key: 'streak', title: 'Longest win streak', description: 'Most wins in a row', icon: 'i-lucide-flame', value: (r) => r.longestWinStreak, format: int },
+  { key: 'played', title: 'Most games played', description: 'Games played', icon: 'i-lucide-hash', value: (r) => r.played, format: int },
+]
+
+/** Games needed to rank in per-game stats: 3, or fewer if nobody has played that many yet. */
+export function minGames(rows: Row[]): number {
+  return Math.min(3, Math.max(0, ...rows.map((r) => r.played)))
 }
 
-export function leaders(matches: Match[]): Leader[] {
-  const rows = standings(matches)
-  const int = (v: number) => String(v)
-  const avg = (v: number) => v.toFixed(2)
-  const pct = (v: number) => `${Math.round(v * 100)}%`
-  const biggestWin = [...matches].sort((a, b) => Math.abs(b.homeGoals - b.awayGoals) - Math.abs(a.homeGoals - a.awayGoals))[0]
-  const highestScoring = [...matches].sort((a, b) => b.homeGoals + b.awayGoals - (a.homeGoals + a.awayGoals))[0]
+export interface Ranked {
+  row: Row
+  value: number
+  qualified: boolean
+}
+
+/** Every player ranked best first; for per-game stats, players below minGames come last. */
+export function ranking(rows: Row[], metric: Metric): Ranked[] {
+  const min = minGames(rows)
+  const direction = metric.lowerIsBetter ? 1 : -1
+  return rows
+    .map((row) => ({ row, value: metric.value(row), qualified: !metric.perGame || row.played >= min }))
+    .sort((a, b) => Number(b.qualified) - Number(a.qualified) || direction * (a.value - b.value) || b.row.played - a.row.played)
+}
+
+/** The qualified players sharing the best value. */
+export function leaders(rows: Row[], metric: Metric): Ranked[] {
+  const ranked = ranking(rows, metric).filter((r) => r.qualified)
+  return ranked.filter((r) => r.value === ranked[0]?.value)
+}
+
+/** Match records: the biggest margin and the most goals in one game. */
+export function matchRecords(matches: Match[]) {
+  const margin = (m: Match) => Math.abs(m.homeGoals - m.awayGoals)
+  const total = (m: Match) => m.homeGoals + m.awayGoals
+  const top = (score: (m: Match) => number) => [...matches].sort((a, b) => score(b) - score(a))[0]
   return [
-    best(rows, 'Most wins', (r) => r.wins, int),
-    best(rows, 'Best win %', winPct, pct),
-    best(rows, 'Most goals', (r) => r.goalsFor, int),
-    best(rows, 'Most goals against', (r) => r.goalsAgainst, int),
-    best(rows, 'Best attack (goals/game)', (r) => perGame(r.goalsFor, r), avg),
-    best(rows, 'Best defence (conceded/game)', (r) => perGame(r.goalsAgainst, r), avg, true),
-    best(rows, 'Most clean sheets', (r) => r.cleanSheets, int),
-    best(rows, 'Longest win streak', (r) => r.longestWinStreak, int),
-    biggestWin && { title: 'Biggest win', playerIds: [], value: `${biggestWin.homeGoals}–${biggestWin.awayGoals}`, match: biggestWin },
-    highestScoring && { title: 'Highest scoring match', playerIds: [], value: `${highestScoring.homeGoals}–${highestScoring.awayGoals}`, match: highestScoring },
-  ].filter((l): l is Leader => !!l)
+    { title: 'Biggest win', match: top(margin) },
+    { title: 'Highest scoring match', match: top(total) },
+  ].filter((r) => r.match)
 }
 
 /** Wins per player per bucket: quarters for all-time, months within a year or quarter. */

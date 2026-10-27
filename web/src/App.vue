@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AddMatchSheet from './components/AddMatchSheet.vue'
 import ChatDock from './components/ChatDock.vue'
 import MatchSheet from './components/MatchSheet.vue'
+import PlayerSlideover from './components/PlayerSlideover.vue'
 import PlayersSlideover from './components/PlayersSlideover.vue'
 import ProfileSlideover from './components/ProfileSlideover.vue'
 import SignIn from './components/SignIn.vue'
@@ -101,6 +102,7 @@ const activeTabClass = '!text-primary font-semibold'
       <AddMatchSheet />
       <MatchSheet />
       <PlayersSlideover />
+      <PlayerSlideover />
       <ProfileSlideover />
     </div>
   </UApp>

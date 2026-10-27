@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import MetricSlideover from '../components/MetricSlideover.vue'
 import PlayerAvatar from '../components/PlayerAvatar.vue'
-import PlayerSlideover from '../components/PlayerSlideover.vue'
 import { RESULT_COLORS, playerColor } from '../colors'
-import { inPeriod, leaders, periods, standings, winPct, winsOverTime } from '../stats'
-import { matches, playerIds, playerName } from '../store'
+import { inPeriod, leaders, matchRecords, METRICS, minGames, perGame, periods, standings, winPct, winsOverTime, type Metric } from '../stats'
+import { matches, openMatchId, openPlayer, playerIds, playerName } from '../store'
 
 const period = ref('all')
 const periodLabel = (p: string) => (p === 'all' ? 'All time' : p.replace('-', ' '))
@@ -12,24 +12,34 @@ const periodItems = computed(() => periods(matches.value).map((p) => ({ value: p
 const filtered = computed(() => matches.value.filter((m) => inPeriod(m, period.value)))
 const rows = computed(() => standings(filtered.value))
 
-const allLeaders = computed(() => leaders(filtered.value))
-const HIGHLIGHTS: Record<string, string> = {
-  'Most wins': 'i-lucide-trophy',
-  'Most goals': 'i-lucide-goal',
-  'Best defence (conceded/game)': 'i-lucide-shield',
-  'Longest win streak': 'i-lucide-flame',
-}
-const highlights = computed(() => allLeaders.value.filter((l) => l.title in HIGHLIGHTS))
+// The four headline cards are per-game stats; every stat opens its full leaderboard
+const HIGHLIGHTS = ['winRate', 'goalsPerGame', 'concededPerGame', 'goalDiffPerGame']
+const highlights = computed(() => METRICS.filter((m) => HIGHLIGHTS.includes(m.key)).map((metric) => ({ metric, leaders: leaders(rows.value, metric) })))
+const records = computed(() => METRICS.map((metric) => ({ metric, leaders: leaders(rows.value, metric) })))
+const matchRecordList = computed(() => matchRecords(filtered.value))
 const recordsOpen = ref(false)
-const shortTitle = (t: string) => t.replace(/ \(.*\)/, '').replace('Longest win streak', 'Win streak')
-const holder = (l: { playerIds: number[]; match?: { homePlayerId: number; awayPlayerId: number } }) =>
-  l.match ? `${playerName.value(l.match.homePlayerId)} vs ${playerName.value(l.match.awayPlayerId)}` : l.playerIds.map(playerName.value).join(', ')
+const names = (ids: number[]) => ids.map(playerName.value).join(', ')
 
-const selectedPlayer = ref<number>()
-const playerOpen = ref(false)
-const openPlayer = (id: number) => {
-  selectedPlayer.value = id
-  playerOpen.value = true
+const metricOpen = ref(false)
+const selectedMetric = ref<Metric>()
+const showMetric = (metric: Metric) => {
+  selectedMetric.value = metric
+  metricOpen.value = true
+}
+
+// Standings columns: shorthand header, full name in the tooltip
+const COLUMNS = {
+  GP: 'Games played',
+  W: 'Wins',
+  D: 'Draws',
+  L: 'Losses',
+  'W-D-L': 'Wins - draws - losses',
+  GF: 'Goals for (scored)',
+  GA: 'Goals against (conceded)',
+  GD: 'Goal difference',
+  'GF/G': 'Goals scored per game',
+  'GA/G': 'Goals conceded per game',
+  'Win%': 'Share of games won',
 }
 
 const chartTab = ref('trend')
@@ -67,20 +77,28 @@ const goalCategories = [
   <UEmpty v-if="!filtered.length" icon="i-lucide-chart-column" title="No matches in this period" description="Pick another period or record a match." />
   <template v-else>
     <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <UCard v-for="l in highlights" :key="l.title" :ui="{ body: 'p-3 sm:p-4' }">
+      <button
+        v-for="h in highlights"
+        :key="h.metric.key"
+        type="button"
+        class="rounded-2xl border border-default bg-default p-3 text-left shadow-sm transition hover:border-primary/50 active:scale-[.98] sm:p-4 dark:bg-elevated/40 dark:shadow-none"
+        @click="showMetric(h.metric)"
+      >
         <div class="mb-2 flex items-center gap-2">
           <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-            <UIcon :name="HIGHLIGHTS[l.title]" class="size-4.5" />
+            <UIcon :name="h.metric.icon" class="size-4.5" />
           </span>
-          <p class="truncate text-xs font-medium text-muted">{{ shortTitle(l.title) }}</p>
+          <p class="min-w-0 flex-1 truncate text-xs font-medium text-muted">{{ h.metric.short ?? h.metric.title }}</p>
+          <UIcon name="i-lucide-chevron-right" class="size-4 text-dimmed" />
         </div>
-        <p class="display text-4xl leading-none text-highlighted">{{ l.value }}</p>
+        <p class="display text-4xl leading-none text-highlighted">{{ h.leaders[0] ? h.metric.format(h.leaders[0].value) : '–' }}</p>
         <div class="mt-2 flex items-center gap-1.5">
-          <PlayerAvatar v-for="id in l.playerIds.slice(0, 3)" :key="id" :id="id" size="2xs" />
-          <span class="truncate text-sm">{{ holder(l) }}</span>
+          <PlayerAvatar v-for="l in h.leaders.slice(0, 3)" :key="l.row.playerId" :id="l.row.playerId" size="2xs" />
+          <span class="truncate text-sm">{{ names(h.leaders.map((l) => l.row.playerId)) }}</span>
         </div>
-      </UCard>
+      </button>
     </div>
+    <p class="-mt-2 text-xs text-muted">Per-game stats count players with at least {{ minGames(rows) }} games. Tap a stat to see everyone.</p>
     <UButton block color="neutral" variant="outline" size="lg" icon="i-lucide-medal" trailing-icon="i-lucide-chevron-right" label="All records" class="bg-default" @click="recordsOpen = true" />
 
     <div class="grid items-start gap-4 lg:grid-cols-[1.3fr_1fr]">
@@ -91,15 +109,21 @@ const goalCategories = [
             <tr class="[&>th]:px-2 [&>th]:py-2 [&>th]:font-semibold">
               <th class="w-8 !pl-4 text-left">#</th>
               <th class="text-left">Player</th>
-              <th class="text-right"><abbr title="Games played" class="no-underline">GP</abbr></th>
-              <th class="hidden text-right sm:table-cell"><abbr title="Wins" class="no-underline">W</abbr></th>
-              <th class="hidden text-right sm:table-cell"><abbr title="Draws" class="no-underline">D</abbr></th>
-              <th class="hidden text-right sm:table-cell"><abbr title="Losses" class="no-underline">L</abbr></th>
-              <th class="text-right sm:hidden"><abbr title="Wins - draws - losses" class="no-underline">W-D-L</abbr></th>
-              <th class="hidden text-right xl:table-cell"><abbr title="Goals for" class="no-underline">GF</abbr></th>
-              <th class="hidden text-right xl:table-cell"><abbr title="Goals against" class="no-underline">GA</abbr></th>
-              <th class="text-right"><abbr title="Goal difference" class="no-underline">GD</abbr></th>
-              <th class="text-right">Win%</th>
+              <th
+                v-for="(full, key) in COLUMNS"
+                :key="key"
+                class="text-right"
+                :class="{
+                  'hidden sm:table-cell': ['W', 'D', 'L', 'GA/G'].includes(key),
+                  'sm:hidden': key === 'W-D-L',
+                  'hidden xl:table-cell': ['GF', 'GA'].includes(key),
+                  'hidden md:table-cell': key === 'GD',
+                }"
+              >
+                <UTooltip :text="full" :content="{ side: 'top' }">
+                  <abbr :title="full" class="cursor-help no-underline">{{ key }}</abbr>
+                </UTooltip>
+              </th>
               <th class="w-8 !pr-3"><span class="sr-only">Details</span></th>
             </tr>
           </thead>
@@ -111,8 +135,8 @@ const goalCategories = [
               role="button"
               :aria-label="`Details for ${playerName(r.playerId)}`"
               class="cursor-pointer transition hover:bg-elevated/60 focus-visible:bg-elevated focus-visible:outline-none active:bg-elevated [&>td]:px-2 [&>td]:py-3"
-              @click="openPlayer(r.playerId)"
-              @keydown.enter="openPlayer(r.playerId)"
+              @click="openPlayer(r.playerId, period)"
+              @keydown.enter="openPlayer(r.playerId, period)"
             >
               <td class="!pl-4 font-semibold text-muted">{{ i + 1 }}</td>
               <td>
@@ -128,14 +152,20 @@ const goalCategories = [
               <td class="text-right whitespace-nowrap sm:hidden">{{ r.wins }}-{{ r.draws }}-{{ r.losses }}</td>
               <td class="hidden text-right xl:table-cell">{{ r.goalsFor }}</td>
               <td class="hidden text-right xl:table-cell">{{ r.goalsAgainst }}</td>
-              <td class="text-right" :class="r.goalsFor > r.goalsAgainst ? 'text-success' : r.goalsFor < r.goalsAgainst ? 'text-error' : 'text-muted'">
+              <td class="hidden text-right md:table-cell" :class="r.goalsFor > r.goalsAgainst ? 'text-success' : r.goalsFor < r.goalsAgainst ? 'text-error' : 'text-muted'">
                 {{ r.goalsFor - r.goalsAgainst > 0 ? '+' : '' }}{{ r.goalsFor - r.goalsAgainst }}
               </td>
+              <td class="text-right">{{ perGame(r.goalsFor, r).toFixed(1) }}</td>
+              <td class="hidden text-right sm:table-cell">{{ perGame(r.goalsAgainst, r).toFixed(1) }}</td>
               <td class="text-right font-semibold text-highlighted">{{ Math.round(winPct(r) * 100) }}%</td>
               <td class="!pr-3 text-dimmed"><UIcon name="i-lucide-chevron-right" class="size-4 align-middle" /></td>
             </tr>
           </tbody>
         </table>
+        <!-- No hover on phones: spell out the short column names -->
+        <p class="px-4 py-3 text-[11px] leading-relaxed text-muted sm:hidden">
+          GP games played · W-D-L wins-draws-losses · GF/G goals per game · Win% share of games won
+        </p>
       </UCard>
 
       <UCard>
@@ -163,26 +193,35 @@ const goalCategories = [
       </UCard>
     </div>
 
-    <USlideover v-model:open="recordsOpen" title="Records" :description="periodLabel(period)">
+    <USlideover v-model:open="recordsOpen" title="Records" :description="`${periodLabel(period)} · tap a record to see everyone`">
       <template #body>
         <ul class="divide-y divide-default">
-          <li v-for="l in allLeaders" :key="l.title" class="flex items-center gap-3 py-3">
-            <div class="min-w-0 flex-1">
-              <p class="text-sm text-muted">{{ l.title }}</p>
-              <p class="truncate font-medium">{{ holder(l) }}</p>
-            </div>
-            <span class="display text-3xl text-highlighted">{{ l.value }}</span>
+          <li v-for="r in records" :key="r.metric.key">
+            <button type="button" class="flex w-full items-center gap-3 py-3 text-left hover:bg-elevated/40" @click="showMetric(r.metric)">
+              <UIcon :name="r.metric.icon" class="size-5 shrink-0 text-primary" />
+              <div class="min-w-0 flex-1">
+                <p class="text-sm text-muted">{{ r.metric.title }}</p>
+                <p class="truncate font-medium">{{ names(r.leaders.map((l) => l.row.playerId)) || '–' }}</p>
+              </div>
+              <span class="display text-2xl text-highlighted">{{ r.leaders[0] ? r.metric.format(r.leaders[0].value) : '–' }}</span>
+              <UIcon name="i-lucide-chevron-right" class="size-4 text-dimmed" />
+            </button>
+          </li>
+          <li v-for="r in matchRecordList" :key="r.title">
+            <button type="button" class="flex w-full items-center gap-3 py-3 text-left hover:bg-elevated/40" @click="openMatchId = r.match.id">
+              <UIcon name="i-lucide-swords" class="size-5 shrink-0 text-primary" />
+              <div class="min-w-0 flex-1">
+                <p class="text-sm text-muted">{{ r.title }}</p>
+                <p class="truncate font-medium">{{ playerName(r.match.homePlayerId) }} vs {{ playerName(r.match.awayPlayerId) }}</p>
+              </div>
+              <span class="display text-2xl text-highlighted">{{ r.match.homeGoals }}–{{ r.match.awayGoals }}</span>
+              <UIcon name="i-lucide-chevron-right" class="size-4 text-dimmed" />
+            </button>
           </li>
         </ul>
       </template>
     </USlideover>
 
-    <PlayerSlideover
-      v-if="selectedPlayer"
-      v-model:open="playerOpen"
-      :player-id="selectedPlayer"
-      :matches="filtered"
-      :period-label="periodLabel(period)"
-    />
+    <MetricSlideover v-model:open="metricOpen" :metric="selectedMetric" :rows="rows" :period="period" :period-label="periodLabel(period)" />
   </template>
 </template>

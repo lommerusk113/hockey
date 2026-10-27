@@ -16,7 +16,6 @@ export interface ReviewRow {
 }
 
 const rows = defineModel<ReviewRow[]>('rows', { required: true })
-defineProps<{ duplicates: Set<number> }>()
 
 const toast = useToast()
 const normalize = (label: string) => label.trim().toLowerCase()
@@ -94,7 +93,6 @@ async function addPlayer(label: string) {
         <UCheckbox v-model="row.include" :aria-label="`Include line ${i + 1}`" />
         <span>Line {{ i + 1 }}</span>
         <span v-if="row.homeLabel || row.awayLabel" class="truncate">· “{{ row.homeLabel }} – {{ row.awayLabel }}”</span>
-        <UBadge v-if="duplicates.has(row.key)" class="ml-auto shrink-0" color="warning" variant="subtle" size="sm" label="Already saved?" />
       </div>
       <div class="grid grid-cols-[minmax(0,1fr)_auto_auto_auto_minmax(0,1fr)] items-center gap-1.5">
         <USelect

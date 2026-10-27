@@ -88,7 +88,6 @@ async function onPhoto(event: Event) {
       return
     }
     rows.value = found.map((m, i) => ({ key: i, include: true, ...m }))
-    for (const row of rows.value) row.include = !duplicates.value.has(row.key)
   } catch (e) {
     toast.add({ title: 'Scan failed', description: (e as Error).message, color: 'error' })
   } finally {
@@ -114,19 +113,6 @@ function setDateMode(mode: DateMode) {
   if (mode === 'other') playedAt.value ??= toLocalInput(new Date())
 }
 
-const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString()
-// A results board grows through the evening, so a re-scan repeats earlier lines; flag those already saved that day.
-const duplicates = computed(() => {
-  const day = playedAt.value ? new Date(playedAt.value) : new Date()
-  const saved = matches.value.filter((m) => sameDay(new Date(m.playedAt), day))
-  const same = (r: ReviewRow) =>
-    saved.some(
-      (m) =>
-        (m.homePlayerId === r.homePlayerId && m.awayPlayerId === r.awayPlayerId && m.homeGoals === r.homeGoals && m.awayGoals === r.awayGoals) ||
-        (m.homePlayerId === r.awayPlayerId && m.awayPlayerId === r.homePlayerId && m.homeGoals === r.awayGoals && m.awayGoals === r.homeGoals),
-    )
-  return new Set(rows.value.filter(same).map((r) => r.key))
-})
 const includedCount = computed(() => rows.value.filter((r) => r.include).length)
 
 async function saveReviewed() {
@@ -224,7 +210,7 @@ function managePlayers() {
         <input ref="fileInput" type="file" accept="image/*" capture="environment" class="hidden" @change="onPhoto" />
       </template>
 
-      <ScanReview v-if="reviewing" v-model:rows="rows" :duplicates="duplicates" />
+      <ScanReview v-if="reviewing" v-model:rows="rows" />
 
       <div v-else class="space-y-3">
         <div class="grid grid-cols-[1fr_auto_1fr] items-end gap-2">

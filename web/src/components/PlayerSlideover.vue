@@ -1,20 +1,32 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { Match } from '../api'
+import { computed, ref, watch } from 'vue'
 import { RESULT_COLORS } from '../colors'
-import { headToHead, perGame, recentForm, standings } from '../stats'
-import { playerName, players } from '../store'
+import { headToHead, inPeriod, perGame, recentForm, standings } from '../stats'
+import { matches as allMatches, playerName, players, playerView } from '../store'
+import MatchList from './MatchList.vue'
 import PlayerAvatar from './PlayerAvatar.vue'
 
-const props = defineProps<{ playerId: number; matches: Match[]; periodLabel: string }>()
-const open = defineModel<boolean>('open', { default: false })
+// Global profile: opened from standings, leaderboards or the Players panel via openPlayer()
+const open = computed({
+  get: () => !!playerView.value,
+  set: (value) => {
+    if (!value) playerView.value = undefined
+  },
+})
+const playerId = computed(() => playerView.value?.id ?? 0)
+const period = computed(() => playerView.value?.period ?? 'all')
+const periodLabel = computed(() => (period.value === 'all' ? 'All time' : period.value.replace('-', ' ')))
+const matches = computed(() => allMatches.value.filter((m) => inPeriod(m, period.value)))
+const theirMatches = computed(() => matches.value.filter((m) => m.homePlayerId === playerId.value || m.awayPlayerId === playerId.value))
+const showAll = ref(false)
+watch(playerView, () => (showAll.value = false))
 
-const row = computed(() => standings(props.matches).find((r) => r.playerId === props.playerId))
-const form = computed(() => recentForm(props.matches, props.playerId))
+const row = computed(() => standings(matches.value).find((r) => r.playerId === playerId.value))
+const form = computed(() => recentForm(matches.value, playerId.value))
 const opponents = computed(() =>
   players.value
-    .filter((p) => p.id !== props.playerId)
-    .map((p) => ({ id: p.id, ...headToHead(props.matches, props.playerId, p.id) }))
+    .filter((p) => p.id !== playerId.value)
+    .map((p) => ({ id: p.id, ...headToHead(matches.value, playerId.value, p.id) }))
     .filter((h) => h.games.length)
     .sort((a, b) => b.games.length - a.games.length),
 )
@@ -70,6 +82,22 @@ const tiles = computed(() => {
             </li>
           </ul>
         </div>
+
+        <div v-if="theirMatches.length">
+          <div class="mb-1 flex items-center justify-between">
+            <p class="eyebrow">Matches ({{ theirMatches.length }})</p>
+            <UButton
+              v-if="theirMatches.length > 8"
+              size="xs"
+              color="neutral"
+              variant="link"
+              :label="showAll ? 'Show fewer' : 'Show all'"
+              @click="showAll = !showAll"
+            />
+          </div>
+          <MatchList :matches="showAll ? theirMatches : theirMatches.slice(0, 8)" />
+        </div>
+        <UEmpty v-else icon="i-lucide-calendar-x" title="No matches in this period" />
       </div>
     </template>
   </USlideover>

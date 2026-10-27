@@ -2,7 +2,7 @@
 import { useToast } from '@nuxt/ui/composables'
 import { computed, ref, watch } from 'vue'
 import { api, type Player } from '../api'
-import { matches, players, playersOpen, refresh } from '../store'
+import { matches, openPlayer, players, playersOpen, refresh } from '../store'
 import PlayerAvatar from './PlayerAvatar.vue'
 
 const name = ref('')
@@ -125,12 +125,12 @@ const menu = (p: Player) => [
             <p v-if="editProblem" class="text-xs text-error">{{ editProblem }}</p>
           </form>
           <template v-else>
-            <div class="min-w-0 flex-1" :class="{ 'opacity-60': !p.active }">
-              <p class="truncate font-medium">{{ p.name }}</p>
+            <button type="button" class="min-w-0 flex-1 text-left" :class="{ 'opacity-60': !p.active }" @click="openPlayer(p.id)">
+              <p class="truncate font-medium hover:underline">{{ p.name }}</p>
               <p class="text-xs text-muted">
                 “{{ p.shortName }}” · {{ gamesPlayed.get(p.id) ?? 0 }} matches<template v-if="!p.active"> · disabled</template>
               </p>
-            </div>
+            </button>
             <UTooltip :text="p.active ? 'Playing — turn off to hide when recording matches' : 'Disabled — turn on to play again'">
               <USwitch
                 :model-value="p.active"

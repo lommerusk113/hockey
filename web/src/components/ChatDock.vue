@@ -89,97 +89,111 @@ const participants = computed(() => [...new Set(messages.value.map((m) => m.user
 
 <template>
   <!-- Collapsed: a bubble in the corner, above the mobile tab bar -->
-  <UButton
-    v-if="!chatOpen"
-    icon="i-lucide-message-circle"
-    size="xl"
-    class="fixed right-4 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-30 size-14 justify-center rounded-full shadow-lg shadow-primary/30 sm:right-6 sm:bottom-6"
-    :ui="{ leadingIcon: 'size-7' }"
-    :aria-label="unread ? `Chat, ${unread} unread` : 'Chat'"
-    @click="chatOpen = true"
+  <Transition
+    enter-active-class="transition duration-200 ease-out motion-reduce:transition-none"
+    enter-from-class="scale-50 opacity-0"
+    leave-active-class="transition duration-150 ease-in motion-reduce:transition-none"
+    leave-to-class="scale-50 opacity-0"
   >
-    <span
-      v-if="unread"
-      class="absolute -top-1 -right-1 grid min-w-5 place-items-center rounded-full bg-error px-1 text-xs font-bold text-white ring-2 ring-default"
+    <UButton
+      v-if="!chatOpen"
+      icon="i-lucide-message-circle"
+      size="xl"
+      class="fixed right-4 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-30 size-14 justify-center rounded-full shadow-lg shadow-primary/30 sm:right-6 sm:bottom-6"
+      :ui="{ leadingIcon: 'size-7' }"
+      :aria-label="unread ? `Chat, ${unread} unread` : 'Chat'"
+      @click="chatOpen = true"
     >
-      {{ unread > 9 ? '9+' : unread }}
-    </span>
-  </UButton>
+      <span
+        v-if="unread"
+        class="absolute -top-1 -right-1 grid min-w-5 place-items-center rounded-full bg-error px-1 text-xs font-bold text-white ring-2 ring-default"
+      >
+        {{ unread > 9 ? '9+' : unread }}
+      </span>
+    </UButton>
+  </Transition>
 
-  <!-- Open: full screen on phones, a corner window on larger screens -->
-  <section
-    v-else
-    role="dialog"
-    aria-label="Chat"
-    class="fixed inset-0 z-40 flex flex-col bg-default pt-[env(safe-area-inset-top)] sm:inset-auto sm:right-6 sm:bottom-6 sm:h-[34rem] sm:max-h-[calc(100dvh-6rem)] sm:w-96 sm:overflow-hidden sm:rounded-2xl sm:border sm:border-default sm:pt-0 sm:shadow-2xl"
-    @keydown.esc="chatOpen = false"
+  <!-- Open: full screen on phones (slides up), a corner window on larger screens (grows from the bubble) -->
+  <Transition
+    enter-active-class="transition duration-250 ease-out motion-reduce:transition-none"
+    enter-from-class="translate-y-full sm:translate-y-4 sm:scale-90 sm:opacity-0"
+    leave-active-class="transition duration-200 ease-in motion-reduce:transition-none"
+    leave-to-class="translate-y-full sm:translate-y-4 sm:scale-90 sm:opacity-0"
   >
-    <header class="flex items-center gap-2 border-b border-default px-3 py-2.5">
-      <div class="flex -space-x-2">
-        <UserAvatar v-for="id in participants" :key="id" :id="id" size="xs" class="ring-2 ring-default" />
+    <section
+      v-if="chatOpen"
+      role="dialog"
+      aria-label="Chat"
+      class="fixed inset-0 z-40 flex origin-bottom-right flex-col bg-default pt-[env(safe-area-inset-top)] sm:inset-auto sm:right-6 sm:bottom-6 sm:h-[34rem] sm:max-h-[calc(100dvh-6rem)] sm:w-96 sm:overflow-hidden sm:rounded-2xl sm:border sm:border-default sm:pt-0 sm:shadow-2xl"
+      @keydown.esc="chatOpen = false"
+    >
+      <header class="flex items-center gap-2 border-b border-default px-3 py-2.5">
+        <div class="flex -space-x-2">
+          <UserAvatar v-for="id in participants" :key="id" :id="id" size="xs" class="ring-2 ring-default" />
+        </div>
+        <p class="flex-1 font-semibold text-highlighted">Chat</p>
+        <UButton icon="i-lucide-chevron-down" color="neutral" variant="ghost" aria-label="Close chat" @click="chatOpen = false" />
+      </header>
+
+      <div ref="scroller" class="flex-1 overflow-y-auto px-3 py-2">
+        <UEmpty v-if="!messages.length" icon="i-lucide-messages-square" title="No messages yet" description="Say hi, or challenge someone to a rematch." />
+        <ol class="space-y-0.5">
+          <li v-for="(m, i) in messages" :key="m.id">
+            <p v-if="newDay(i)" class="my-3 text-center text-xs text-muted">{{ day(m.createdAt) }}</p>
+            <p v-if="firstOfRun(i) && !mine(m)" class="mt-3 mb-0.5 ml-10 text-xs font-medium text-muted">{{ userById(m.userId)?.name ?? '?' }}</p>
+            <!-- Avatar, bubble, reactions on one row, centred on the bubble; reactions sit on the outer side -->
+            <div class="group flex items-center gap-1.5" :class="{ 'flex-row-reverse': mine(m), 'mt-3': firstOfRun(i) && mine(m) && !newDay(i) }">
+              <div class="grid w-8 shrink-0 place-items-center">
+                <UserAvatar v-if="firstOfRun(i)" :id="m.userId" size="md" />
+              </div>
+              <div
+                class="max-w-[65%] min-w-0 rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-line"
+                :class="mine(m) ? 'rounded-br-md bg-primary text-inverted' : 'rounded-bl-md bg-elevated text-highlighted'"
+              >
+                {{ m.body }}
+                <span class="ml-1.5 align-bottom text-[10px] opacity-70">{{ time(m.createdAt) }}</span>
+              </div>
+              <div v-if="m.reactions.length" class="flex shrink-0 gap-1" :class="{ 'flex-row-reverse': mine(m) }">
+                <UTooltip v-for="r in reactionChips(m)" :key="r.emoji" :text="r.names">
+                  <button
+                    type="button"
+                    class="flex items-center gap-0.5 rounded-full border px-1.5 text-xs leading-5 tabular-nums"
+                    :class="r.mine ? 'border-primary bg-primary/10' : 'border-default bg-default'"
+                    :aria-pressed="r.mine"
+                    :aria-label="`${r.emoji} ${r.count}`"
+                    @click="react(m, r.emoji)"
+                  >
+                    {{ r.emoji }}<span v-if="r.count > 1">{{ r.count }}</span>
+                  </button>
+                </UTooltip>
+              </div>
+              <UPopover :open="pickerFor === m.id" :content="{ side: 'top' }" @update:open="(open: boolean) => (pickerFor = open ? m.id : undefined)">
+                <UButton
+                  icon="i-lucide-smile-plus"
+                  size="xs"
+                  color="neutral"
+                  variant="ghost"
+                  class="shrink-0 opacity-60 group-hover:opacity-100 sm:opacity-0 sm:focus-visible:opacity-100"
+                  :class="{ 'sm:opacity-100': pickerFor === m.id }"
+                  aria-label="React"
+                />
+                <template #content>
+                  <div class="flex gap-0.5 p-1">
+                    <UButton v-for="e in REACTIONS" :key="e" color="neutral" variant="ghost" class="text-xl" :aria-label="`React ${e}`" @click="react(m, e)">
+                      {{ e }}
+                    </UButton>
+                  </div>
+                </template>
+              </UPopover>
+            </div>
+          </li>
+        </ol>
       </div>
-      <p class="flex-1 font-semibold text-highlighted">Chat</p>
-      <UButton icon="i-lucide-chevron-down" color="neutral" variant="ghost" aria-label="Close chat" @click="chatOpen = false" />
-    </header>
 
-    <div ref="scroller" class="flex-1 overflow-y-auto px-3 py-2">
-      <UEmpty v-if="!messages.length" icon="i-lucide-messages-square" title="No messages yet" description="Say hi, or challenge someone to a rematch." />
-      <ol class="space-y-0.5">
-        <li v-for="(m, i) in messages" :key="m.id">
-          <p v-if="newDay(i)" class="my-3 text-center text-xs text-muted">{{ day(m.createdAt) }}</p>
-          <p v-if="firstOfRun(i) && !mine(m)" class="mt-3 mb-0.5 ml-10 text-xs font-medium text-muted">{{ userById(m.userId)?.name ?? '?' }}</p>
-          <!-- Avatar, bubble, reactions on one row, centred on the bubble; reactions sit on the outer side -->
-          <div class="group flex items-center gap-1.5" :class="{ 'flex-row-reverse': mine(m), 'mt-3': firstOfRun(i) && mine(m) && !newDay(i) }">
-            <div class="grid w-8 shrink-0 place-items-center">
-              <UserAvatar v-if="firstOfRun(i)" :id="m.userId" size="md" />
-            </div>
-            <div
-              class="max-w-[65%] min-w-0 rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-line"
-              :class="mine(m) ? 'rounded-br-md bg-primary text-inverted' : 'rounded-bl-md bg-elevated text-highlighted'"
-            >
-              {{ m.body }}
-              <span class="ml-1.5 align-bottom text-[10px] opacity-70">{{ time(m.createdAt) }}</span>
-            </div>
-            <div v-if="m.reactions.length" class="flex shrink-0 gap-1" :class="{ 'flex-row-reverse': mine(m) }">
-              <UTooltip v-for="r in reactionChips(m)" :key="r.emoji" :text="r.names">
-                <button
-                  type="button"
-                  class="flex items-center gap-0.5 rounded-full border px-1.5 text-xs leading-5 tabular-nums"
-                  :class="r.mine ? 'border-primary bg-primary/10' : 'border-default bg-default'"
-                  :aria-pressed="r.mine"
-                  :aria-label="`${r.emoji} ${r.count}`"
-                  @click="react(m, r.emoji)"
-                >
-                  {{ r.emoji }}<span v-if="r.count > 1">{{ r.count }}</span>
-                </button>
-              </UTooltip>
-            </div>
-            <UPopover :open="pickerFor === m.id" :content="{ side: 'top' }" @update:open="(open: boolean) => (pickerFor = open ? m.id : undefined)">
-              <UButton
-                icon="i-lucide-smile-plus"
-                size="xs"
-                color="neutral"
-                variant="ghost"
-                class="shrink-0 opacity-60 group-hover:opacity-100 sm:opacity-0 sm:focus-visible:opacity-100"
-                :class="{ 'sm:opacity-100': pickerFor === m.id }"
-                aria-label="React"
-              />
-              <template #content>
-                <div class="flex gap-0.5 p-1">
-                  <UButton v-for="e in REACTIONS" :key="e" color="neutral" variant="ghost" class="text-xl" :aria-label="`React ${e}`" @click="react(m, e)">
-                    {{ e }}
-                  </UButton>
-                </div>
-              </template>
-            </UPopover>
-          </div>
-        </li>
-      </ol>
-    </div>
-
-    <form class="flex gap-2 border-t border-default p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]" @submit.prevent="send">
-      <UInput v-model="draft" placeholder="Message" class="flex-1" size="lg" maxlength="2000" aria-label="Message" autocomplete="off" />
-      <UButton type="submit" icon="i-lucide-send" size="lg" aria-label="Send" :loading="sending" :disabled="!draft.trim()" />
-    </form>
-  </section>
+      <form class="flex gap-2 border-t border-default p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]" @submit.prevent="send">
+        <UInput v-model="draft" placeholder="Message" class="flex-1" size="lg" maxlength="2000" aria-label="Message" autocomplete="off" />
+        <UButton type="submit" icon="i-lucide-send" size="lg" aria-label="Send" :loading="sending" :disabled="!draft.trim()" />
+      </form>
+    </section>
+  </Transition>
 </template>
