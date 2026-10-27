@@ -102,6 +102,7 @@ export const api = {
   addMatch: (m: NewMatch) => request<Match>('/api/matches', json(m)),
   addMatches: (batch: NewMatch[]) => request<Match[]>('/api/matches/batch', json(batch)),
   updateMatch: (id: number, m: Omit<Match, 'id'>) => request<Match>(`/api/matches/${id}`, json(m, 'PUT')),
+  deleteMatches: (ids: number[]) => request<void>(`/api/matches?ids=${ids.join(',')}`, { method: 'DELETE' }),
   deleteMatch: (id: number) => request<void>(`/api/matches/${id}`, { method: 'DELETE' }),
   me: () => request<Me>('/api/me'),
   updateMe: (settings: Pick<Me, 'playerId' | 'notifyMatches' | 'notifyChat'>) => request<Me>('/api/me', json(settings, 'PUT')),

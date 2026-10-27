@@ -8,6 +8,7 @@ import io.micronaut.http.annotation.Delete;
 import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Put;
+import io.micronaut.http.annotation.QueryValue;
 import io.micronaut.http.annotation.Status;
 import io.micronaut.http.exceptions.HttpStatusException;
 import io.micronaut.http.multipart.CompletedFileUpload;
@@ -95,6 +96,16 @@ public class HockeyController {
         }
 
         return matches.update(withDefaults(id, match));
+    }
+
+    /** Deletes several matches at once (comments and reactions go with them). */
+    @Status(HttpStatus.NO_CONTENT)
+    @Delete("/matches")
+    public void deleteMatches(@QueryValue List<Long> ids) {
+
+        if (!ids.isEmpty()) {
+            matches.deleteByIdIn(ids);
+        }
     }
 
     @Status(HttpStatus.NO_CONTENT)

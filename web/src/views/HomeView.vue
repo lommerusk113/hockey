@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { useToast } from '@nuxt/ui/composables'
+import { computed, ref, watch } from 'vue'
+import { api } from '../api'
 import MatchList from '../components/MatchList.vue'
 import PlayerAvatar from '../components/PlayerAvatar.vue'
 import { standings, winPct } from '../stats'
@@ -8,6 +10,44 @@ import { addMatchOpen, loadError, loaded, matches, playerName, players, playersO
 const latest = computed(() => matches.value[0])
 const top = computed(() => standings(matches.value).slice(0, 3))
 const allOpen = ref(false)
+
+// Select mode in "All matches": tick rows, then delete them in one go (tap twice to confirm)
+const selected = ref<number[]>()
+const selecting = computed(() => selected.value !== undefined)
+const confirmingDelete = ref(false)
+const deleting = ref(false)
+const toast = useToast()
+const toggleSelected = (id: number) => {
+  const list = selected.value!
+  const at = list.indexOf(id)
+  if (at >= 0) list.splice(at, 1)
+  else list.push(id)
+}
+const stopSelecting = () => {
+  selected.value = undefined
+  confirmingDelete.value = false
+}
+watch(allOpen, stopSelecting)
+watch(() => selected.value?.length, () => (confirmingDelete.value = false))
+
+async function deleteSelected() {
+  if (!confirmingDelete.value) {
+    confirmingDelete.value = true
+    return
+  }
+  deleting.value = true
+  try {
+    const count = selected.value!.length
+    await api.deleteMatches(selected.value!)
+    await refresh()
+    toast.add({ title: `${count} ${count === 1 ? 'match' : 'matches'} deleted`, icon: 'i-lucide-trash-2' })
+    stopSelecting()
+  } catch (e) {
+    toast.add({ title: 'Could not delete', description: (e as Error).message, color: 'error' })
+  } finally {
+    deleting.value = false
+  }
+}
 const RANK_CLASSES = [
   'bg-amber-400/20 text-amber-700 dark:text-amber-300',
   'bg-slate-400/20 text-slate-600 dark:text-slate-300',
@@ -127,8 +167,38 @@ const relative = (iso: string) => {
     </div>
 
     <USlideover v-model:open="allOpen" title="All matches" :description="`${matches.length} played`">
+      <template #actions>
+        <UButton
+          :label="selecting ? 'Done' : 'Select'"
+          :icon="selecting ? undefined : 'i-lucide-list-checks'"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          @click="selecting ? stopSelecting() : (selected = [])"
+        />
+      </template>
       <template #body>
-        <MatchList :matches="matches" />
+        <MatchList :matches="matches" :selected="selected" @toggle="toggleSelected" />
+      </template>
+      <template v-if="selecting" #footer>
+        <div class="flex w-full items-center gap-2">
+          <UButton
+            color="neutral"
+            variant="ghost"
+            :label="selected!.length === matches.length ? 'Clear' : 'Select all'"
+            @click="selected = selected!.length === matches.length ? [] : matches.map((m) => m.id)"
+          />
+          <UButton
+            class="ml-auto"
+            color="error"
+            :variant="confirmingDelete ? 'solid' : 'soft'"
+            icon="i-lucide-trash-2"
+            :loading="deleting"
+            :disabled="!selected!.length"
+            :label="confirmingDelete ? `Tap again to delete ${selected!.length}` : `Delete ${selected!.length}`"
+            @click="deleteSelected"
+          />
+        </div>
       </template>
     </USlideover>
   </template>
