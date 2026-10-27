@@ -13,6 +13,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -27,9 +28,11 @@ public class ScoreScanner {
         This photo shows results from the Stiga table hockey game.
         Usually it is a whiteboard or paper with one match per line, written like "A - B : 2 - 3",
         where A and B are player names or abbreviations and the first score belongs to A.
+        homeLabel is only the first player as written (e.g. "K"), awayLabel only the second (e.g. "Mf").
         It can also be a single game scoreboard; then return it as one match with empty labels.
-        Return every readable match in the order written, top to bottom, keeping each line's left-to-right order.
-        Give each label exactly as written. Skip lines you cannot read. Return an empty list if there are no results.""";
+        A board can have several columns and 50 or more lines. Transcribe every single line; do not stop early or summarize.
+        Read the left column top to bottom first, then the next column, keeping each line's left-to-right order.
+        Faint, half-erased lines count too. Skip only lines that are truly unreadable.""";
     private static final Map<String, Object> SCHEMA = Map.of(
         "type", "object",
         "additionalProperties", false,
@@ -75,12 +78,14 @@ public class ScoreScanner {
             "reasoning", Map.of("effort", "low"),
             "input", List.of(Map.of("role", "user", "content", List.of(
                 Map.of("type", "input_text", "text", PROMPT),
-                Map.of("type", "input_image", "image_url", dataUrl)
+                Map.of("type", "input_image", "image_url", dataUrl, "detail", "high")
             ))),
             "text", Map.of("format", Map.of("type", "json_schema", "name", "score", "strict", true, "schema", SCHEMA))
         );
 
+        // A full board takes gpt-5-mini around 30 seconds; stay under the proxy's 120 s timeout
         var request = HttpRequest.newBuilder(URI.create("https://api.openai.com/v1/responses"))
+            .timeout(Duration.ofSeconds(110))
             .header("Authorization", "Bearer " + apiKey)
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofByteArray(json.writeValueAsBytes(body)))
@@ -99,6 +104,7 @@ public class ScoreScanner {
             .orElseThrow(() -> new HttpStatusException(HttpStatus.BAD_GATEWAY, "OpenAI returned no answer"));
 
         return json.readValue(text, AiResult.class).matches().stream()
+            .map(ScoreScanner::splitMergedLabels)
             .map(m -> new ScannedMatch(
                 m.homeLabel(),
                 m.awayLabel(),
@@ -107,6 +113,23 @@ public class ScoreScanner {
                 m.homeGoals(),
                 m.awayGoals()))
             .toList();
+    }
+
+    /**
+     * The model sometimes returns "K-Mf" as the first label and leaves the second empty; split it back into two players.
+     */
+    static AiMatch splitMergedLabels(AiMatch match) {
+
+        if (!match.awayLabel().isBlank()) {
+            return match;
+        }
+
+        var parts = match.homeLabel().split("\\s*[-–]\\s*", 2);
+        if (parts.length < 2) {
+            return match;
+        }
+
+        return new AiMatch(parts[0].trim(), parts[1].trim(), match.homeGoals(), match.awayGoals());
     }
 
     /**

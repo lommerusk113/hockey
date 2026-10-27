@@ -26,4 +26,19 @@ class ScoreScannerTest extends Specification {
             'Si'     || null
             ''       || null
     }
+
+    def 'split merged label #home / #away'() {
+        when:
+            def match = ScoreScanner.splitMergedLabels(new ScoreScanner.AiMatch(home, away, 2, 3))
+        then:
+            [match.homeLabel(), match.awayLabel()] == expected
+        and:
+            [match.homeGoals(), match.awayGoals()] == [2, 3]
+        where:
+            home      | away || expected
+            'K-Mf'    | ''   || ['K', 'Mf']
+            'Ni – M'  | ' '  || ['Ni', 'M']
+            'K'       | 'Mf' || ['K', 'Mf']
+            ''        | ''   || ['', '']
+    }
 }

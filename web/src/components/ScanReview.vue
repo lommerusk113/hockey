@@ -29,6 +29,10 @@ function assign(label: string, playerId: number | undefined) {
   }
 }
 
+function addRow() {
+  rows.value.push({ key: Math.max(-1, ...rows.value.map((r) => r.key)) + 1, include: true, homeLabel: '', awayLabel: '', homeGoals: 0, awayGoals: 0 })
+}
+
 function pick(row: ReviewRow, side: 'home' | 'away', playerId: number | undefined) {
   const label = side === 'home' ? row.homeLabel : row.awayLabel
   if (label.trim()) {
@@ -120,5 +124,6 @@ async function addPlayer(label: string) {
         />
       </div>
     </div>
+    <UButton block color="neutral" variant="outline" icon="i-lucide-plus" label="Add missed line" @click="addRow" />
   </div>
 </template>
